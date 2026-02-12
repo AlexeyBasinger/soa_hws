@@ -1,0 +1,6 @@
+compile_commands.json
+.cache/
+.clangd/
+.clang-format
+.DS_Store
+
