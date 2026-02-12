@@ -12,9 +12,9 @@
 code и component не реализовывал, так как не надо)
 
 Context
-![](./c4_diagram/context_screen.png)
+![](https://github.com/AlexeyBasinger/soa_hws/blob/hw1_marketplace/c4_diagram/diam_screens/context_screen.png)
 Container
-![](./c4_diagram/container_screen.png)
+![](https://github.com/AlexeyBasinger/soa_hws/blob/hw1_marketplace/c4_diagram/diam_screens/container_screen.png)
 ## Сервис
 Для реализации взял cpp-httplib, простая и легкая библа, идеально для нашей задачи. 
 Команды чтобы запустить контейнер и проверить /health:
