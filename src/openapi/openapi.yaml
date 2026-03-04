@@ -31,7 +31,7 @@ paths:
             schema:
               $ref: '#/components/schemas/AuthRegisterRequest'
       responses:
-        '201':
+        '200':
           description: Registered
         '400':
           description: VALIDATION_ERROR
@@ -104,7 +104,7 @@ paths:
             schema:
               $ref: '#/components/schemas/ProductCreate'
       responses:
-        '201':
+        '200':
           description: Товар создан
           content:
             application/json:
@@ -345,7 +345,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OrderCreate'
       responses:
-        '201':
+        '200':
           description: Заказ создан
           content:
             application/json:
