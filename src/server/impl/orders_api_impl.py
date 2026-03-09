@@ -18,7 +18,6 @@ from openapi_server.models.order_update import OrderUpdate
 from openapi_server.models.order_response import OrderResponse
 from openapi_server.models.order_item_response import OrderItemResponse
 
-
 def _db_url() -> str:
     url = os.getenv("DATABASE_URL")
     if not url:

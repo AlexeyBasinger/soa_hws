@@ -21,6 +21,7 @@ from openapi_server.apis.products_api import router as products_router
 from openapi_server.apis.orders_api import router as orders_router
 from openapi_server.apis.auth_api import router as auth_router
 
+
 app = FastAPI(title="Marketplace API")
 
 app.include_router(auth_router)
@@ -39,10 +40,6 @@ def _jwt_secret() -> str:
 
 
 def _decode_access_token(token: str) -> Tuple[str, str]:
-    """
-    Возвращает (user_id, role) из access token.
-    Бросает ApiError TOKEN_EXPIRED / TOKEN_INVALID.
-    """
     try:
         payload = jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
     except ExpiredSignatureError:
@@ -72,6 +69,46 @@ def _is_public_path(path: str) -> bool:
     return False
 
 
+def _mask_sensitive_body(body_text: str | None) -> str | None:
+    if body_text is None:
+        return None
+
+    try:
+        data = json.loads(body_text)
+    except Exception:
+        return body_text
+
+    if isinstance(data, dict):
+        sensitive_keys = {"password", "refresh_token", "access_token"}
+
+        def mask(obj):
+            if isinstance(obj, dict):
+                out = {}
+                for k, v in obj.items():
+                    if k in sensitive_keys:
+                        out[k] = "***"
+                    else:
+                        out[k] = mask(v)
+                return out
+            if isinstance(obj, list):
+                return [mask(x) for x in obj]
+            return obj
+
+        try:
+            return json.dumps(mask(data), ensure_ascii=False)[:MAX_BODY_LOG]
+        except Exception:
+            return body_text
+
+    return body_text
+
+
+def _api_error_to_response(exc: ApiError) -> JSONResponse:
+    body = {"error_code": exc.error_code, "message": exc.message}
+    if exc.details is not None:
+        body["details"] = exc.details
+    return JSONResponse(status_code=exc.status_code, content=body)
+
+
 @app.middleware("http")
 async def request_id_auth_and_logging_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
@@ -79,44 +116,59 @@ async def request_id_auth_and_logging_middleware(request: Request, call_next):
 
     start = time.perf_counter()
     body_text = None
-
-    if request.method in ("POST", "PUT", "DELETE"):
-        body = await request.body()
-        if body:
-            body_text = body.decode("utf-8", errors="replace")[:MAX_BODY_LOG]
-
-        async def receive():
-            return {"type": "http.request", "body": body, "more_body": False}
-        request._receive = receive
-
+    response = None
+    status_code = 500
     user_id = None
     role = None
 
-    if not _is_public_path(request.url.path):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            raise ApiError("TOKEN_INVALID", "Missing or invalid access token", 401)
-
-        token = auth.removeprefix("Bearer ").strip()
-        user_id, role = _decode_access_token(token)
-
-        request.state.user_id = user_id
-        request.state.role = role
-
-        current_user_id.set(user_id)
-        current_role.set(role)
-    else:
-        request.state.user_id = None
-        request.state.role = None
-        current_user_id.set(None)
-        current_role.set(None)
-
-    response = None
-    status_code = 500
     try:
+        if request.method in ("POST", "PUT", "DELETE"):
+            body = await request.body()
+            if body:
+                raw_body_text = body.decode("utf-8", errors="replace")[:MAX_BODY_LOG]
+                body_text = _mask_sensitive_body(raw_body_text)
+
+            async def receive():
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            request._receive = receive
+
+        if not _is_public_path(request.url.path):
+            auth = request.headers.get("Authorization", "")
+            if not auth.startswith("Bearer "):
+                response = JSONResponse(
+                    status_code=401,
+                    content={
+                        "error_code": "TOKEN_INVALID",
+                        "message": "Missing or invalid access token",
+                    },
+                )
+                status_code = 401
+                return response
+
+            token = auth.removeprefix("Bearer ").strip()
+
+            try:
+                user_id, role = _decode_access_token(token)
+            except ApiError as exc:
+                response = _api_error_to_response(exc)
+                status_code = exc.status_code
+                return response
+
+            request.state.user_id = user_id
+            request.state.role = role
+            current_user_id.set(user_id)
+            current_role.set(role)
+        else:
+            request.state.user_id = None
+            request.state.role = None
+            current_user_id.set(None)
+            current_role.set(None)
+
         response = await call_next(request)
         status_code = response.status_code
         return response
+
     finally:
         duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -132,6 +184,7 @@ async def request_id_auth_and_logging_middleware(request: Request, call_next):
             "user_id": user_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
         if body_text is not None:
             log["request_body"] = body_text
 
@@ -143,10 +196,7 @@ async def request_id_auth_and_logging_middleware(request: Request, call_next):
 
 @app.exception_handler(ApiError)
 async def api_error_handler(_: Request, exc: ApiError):
-    body = {"error_code": exc.error_code, "message": exc.message}
-    if exc.details is not None:
-        body["details"] = exc.details
-    return JSONResponse(status_code=exc.status_code, content=body)
+    return _api_error_to_response(exc)
 
 
 @app.exception_handler(RequestValidationError)

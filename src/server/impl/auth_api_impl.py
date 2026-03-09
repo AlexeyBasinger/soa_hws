@@ -20,7 +20,6 @@ from openapi_server.models.auth_login_request import AuthLoginRequest
 from openapi_server.models.auth_refresh_request import AuthRefreshRequest
 from openapi_server.models.auth_tokens_response import AuthTokensResponse
 
-
 ALLOWED_ROLES = {"USER", "SELLER", "ADMIN"}
 
 
