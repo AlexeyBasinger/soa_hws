@@ -12,6 +12,12 @@ from psycopg.errors import InvalidTextRepresentation
 from server.errors import ApiError
 from server.context import current_user_id, current_role
 
+# from generated.src.openapi_server.apis.orders_api_base import BaseOrdersApi
+# from generated.src.openapi_server.models.order_create import OrderCreate
+# from generated.src.openapi_server.models.order_update import OrderUpdate
+# from generated.src.openapi_server.models.order_response import OrderResponse
+# from generated.src.openapi_server.models.order_item_response import OrderItemResponse
+
 from openapi_server.apis.orders_api_base import BaseOrdersApi
 from openapi_server.models.order_create import OrderCreate
 from openapi_server.models.order_update import OrderUpdate

@@ -39,7 +39,7 @@ services:
       - flyway
     environment:
       DATABASE_URL: postgresql://marketplace:marketplace@db:5432/marketplace
-      JWT_SECRET: "dev-secret-change-me"
+      JWT_SECRET: "8f3c0a5d1f4e9b2c7d8e6a1b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2"
       ACCESS_TTL_MINUTES: "20"
       REFRESH_TTL_DAYS: "14"
     ports:

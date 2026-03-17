@@ -17,6 +17,10 @@ from fastapi.responses import JSONResponse
 from server.errors import ApiError
 from server.context import current_user_id, current_role
 
+# from impl.generated.src.openapi_server.apis.products_api import router as products_router
+# from impl.generated.src.openapi_server.apis.orders_api import router as orders_router
+# from impl.generated.src.openapi_server.apis.auth_api import router as auth_router
+
 from openapi_server.apis.products_api import router as products_router
 from openapi_server.apis.orders_api import router as orders_router
 from openapi_server.apis.auth_api import router as auth_router

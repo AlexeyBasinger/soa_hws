@@ -4,3 +4,4 @@ compile_commands.json
 .clang-format
 .DS_Store
 venv
+src/server/impl/generated

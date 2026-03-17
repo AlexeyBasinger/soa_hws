@@ -14,6 +14,12 @@ from psycopg.errors import UniqueViolation
 
 from server.errors import ApiError
 
+# from generated.src.openapi_server.apis.auth_api_base import BaseAuthApi
+# from generated.src.openapi_server.models.auth_register_request import AuthRegisterRequest
+# from generated.src.openapi_server.models.auth_login_request import AuthLoginRequest
+# from generated.src.openapi_server.models.auth_refresh_request import AuthRefreshRequest
+# from generated.src.openapi_server.models.auth_tokens_response import AuthTokensResponse
+
 from openapi_server.apis.auth_api_base import BaseAuthApi
 from openapi_server.models.auth_register_request import AuthRegisterRequest
 from openapi_server.models.auth_login_request import AuthLoginRequest

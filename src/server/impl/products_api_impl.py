@@ -11,6 +11,12 @@ from psycopg.errors import InvalidTextRepresentation
 from server.errors import ApiError
 from server.context import current_user_id, current_role
 
+# from generated.src.openapi_server.apis.products_api_base import BaseProductsApi
+# from generated.src.openapi_server.models.product_create import ProductCreate
+# from generated.src.openapi_server.models.product_update import ProductUpdate
+# from generated.src.openapi_server.models.product_response import ProductResponse
+# from generated.src.openapi_server.models.product_page import ProductPage
+
 from openapi_server.apis.products_api_base import BaseProductsApi
 from openapi_server.models.product_create import ProductCreate
 from openapi_server.models.product_update import ProductUpdate
