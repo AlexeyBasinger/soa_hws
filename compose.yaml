@@ -1,49 +1,165 @@
 services:
-  swagger-ui:
-    image: swaggerapi/swagger-ui:latest
-    ports:
-      - "8081:8080"
-    environment:
-      SWAGGER_JSON: /spec/openapi.yaml
-    volumes:
-      - ./src/openapi/openapi.yaml:/spec/openapi.yaml:ro
-
-  db:
+  booking-db:
     image: postgres:16
     environment:
-      POSTGRES_DB: marketplace
-      POSTGRES_USER: marketplace
-      POSTGRES_PASSWORD: marketplace
+      POSTGRES_DB: booking_db
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: booking_pass
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - booking_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking_user -d booking_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  flyway:
+  flight-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: flight_db
+      POSTGRES_USER: flight_user
+      POSTGRES_PASSWORD: flight_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - flight_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flight_user -d flight_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  booking-migrate:
     image: flyway/flyway:10
     depends_on:
-      - db
-    command: >
-      -url=jdbc:postgresql://db:5432/marketplace
-      -user=marketplace
-      -password=marketplace
-      -connectRetries=60
-      migrate
+      booking-db:
+        condition: service_healthy
+    command:
+      - -url=jdbc:postgresql://booking-db:5432/booking_db
+      - -user=booking_user
+      - -password=booking_pass
+      - -locations=filesystem:/flyway/sql
+      - migrate
     volumes:
-      - ./src/db/migrations:/flyway/sql:ro
+      - ./src/db/migrations/booking_service:/flyway/sql
+    restart: "no"
 
-  api:
-    build: .
+  flight-migrate:
+    image: flyway/flyway:10
     depends_on:
-      - db
-      - flyway
+      flight-db:
+        condition: service_healthy
+    command:
+      - -url=jdbc:postgresql://flight-db:5432/flight_db
+      - -user=flight_user
+      - -password=flight_pass
+      - -locations=filesystem:/flyway/sql
+      - migrate
+    volumes:
+      - ./src/db/migrations/flight_service:/flyway/sql
+    restart: "no"
+
+  flight-service:
+    build:
+      context: .
+      dockerfile: src/flight_service/Dockerfile
+    depends_on:
+      flight-db:
+        condition: service_healthy
+      flight-migrate:
+        condition: service_completed_successfully
+      redis-sentinel:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://marketplace:marketplace@db:5432/marketplace
-      JWT_SECRET: "dev-secret-change-me"
-      ACCESS_TTL_MINUTES: "20"
-      REFRESH_TTL_DAYS: "14"
+      DATABASE_URL: postgresql+psycopg://flight_user:flight_pass@flight-db:5432/flight_db
+      GRPC_PORT: "50051"
+      GRPC_API_KEY: super-secret-internal-key
+      REDIS_SENTINELS: redis-sentinel:26379
+      REDIS_MASTER_NAME: mymaster
+      CACHE_TTL_SECONDS: "300"
+    ports:
+      - "50051:50051"
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: ./src/booking_service/Dockerfile
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      booking-migrate:
+        condition: service_completed_successfully
+      flight-service:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg://booking_user:booking_pass@booking-db:5432/booking_db
+      FLIGHT_GRPC_TARGET: flight-service:50051
+      GRPC_API_KEY: super-secret-internal-key
+      GRPC_TIMEOUT_SECONDS: "1.5"
+      CB_FAILURE_THRESHOLD: "5"
+      CB_WINDOW_SECONDS: "30"
+      CB_OPEN_TIMEOUT_SECONDS: "15"
     ports:
       - "8080:8080"
 
+  redis-master:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-replica:
+    image: redis:7-alpine
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command:
+      [
+        "redis-server",
+        "--replicaof", "redis-master", "6379",
+        "--appendonly", "yes"
+      ]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-sentinel:
+    image: redis:7-alpine
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    command:
+      - sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<'EOF'
+        port 26379
+        bind 0.0.0.0
+        sentinel resolve-hostnames yes
+        sentinel monitor mymaster redis-master 6379 1
+        sentinel down-after-milliseconds mymaster 5000
+        sentinel failover-timeout mymaster 60000
+        sentinel parallel-syncs mymaster 1
+        EOF
+        exec redis-server /tmp/sentinel.conf --sentinel
+    ports:
+      - "26379:26379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "PING"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  
 volumes:
-  pgdata:
+  booking_pg_data:
+  flight_pg_data:
