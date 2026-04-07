@@ -1,6 +1,0 @@
-grpcio
-grpcio-tools
-protobuf
-SQLAlchemy
-psycopg[binary]
-redis
